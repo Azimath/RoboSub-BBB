@@ -2,32 +2,90 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <diagnostic_msgs/DiagnosticStatus.h>
+#include <diagnostic_msgs/SelfTest.h>
+
+#define THRUSTER_UNDERVOLT 11.0
+#define THRUSTER_OVERVOLT 20.0
+#define THRUSTER_OVERCURRENT 25.0
+#define THRUSTER_OVERTEMP 40.0
+
+inline const std::string BoolToString(const bool b); //http://stackoverflow.com/a/29798
 
 class ThrusterManager {
     ros::NodeHandle nh_;
     ros::Subscriber command_subscriber;
+    ros::Publisher diagnostics_output;
+
+    ros::AsyncSpinner spinner;
 
     T200Thruster thrusterr;
     T200Thruster thrusterl;
 
 public:
-    ThrusterManager() : thrusterl(2, 0x2D), thrusterr(2, 0x2E)
+    ThrusterManager() : thrusterl(2, 0x2D), thrusterr(2, 0x2E), spinner(1)
     {
         command_subscriber = nh_.subscribe("/thrustercommands", 1000, &ThrusterManager::thrusterCb, this);
 
-        //thrusters.reserve(6);
-        //thrusters = T200Thruster(2, 0x2D);
-        //thrusters[1] = T200Thruster(2, 0x2E);
+        diagnostics_output = nh_.advertise<diagnostic_msgs::DiagnosticStatus>("/diagnostics", 1000);
     }
 
     void init()
     {
-        ros::Rate rate(50);
+        if(spinner.canStart())
+            spinner.start();
+        else
+            return;
+
+        ros::Rate rate(4);
         while(ros::ok()) {
             //Publish diagnostic data here
-            ros::spinOnce();
+            diagnostic_msgs::DiagnosticStatus status;
+            status.name = "Thrusters";
+            status.hardware_id = "Thrusters";
+
+            thrusterr.updateStatus();
+            thrusterl.updateStatus();
+
+            bool thrustersAlive = thrusterr.isAlive() && thrusterl.isAlive();
+            bool thrustersPowerOK = (THRUSTER_OVERVOLT > thrusterr.getVoltage() > THRUSTER_UNDERVOLT) &&
+                                    (THRUSTER_OVERVOLT > thrusterl.getVoltage() > THRUSTER_UNDERVOLT);
+            bool thrustersCurrentOK = (THRUSTER_OVERCURRENT > thrusterr.getCurrent()) &&
+                                     (THRUSTER_OVERCURRENT > thrusterl.getCurrent());
+            bool thrustersTemperatureOK = (THRUSTER_OVERTEMP > thrusterr.getTemperature()) &&
+                                         (THRUSTER_OVERTEMP > thrusterl.getTemperature());
+            if (thrustersAlive && thrustersPowerOK && thrustersCurrentOK && thrustersTemperatureOK)
+                status.level = status.OK;
+            else
+                status.level = status.ERROR;
+
+            PushDiagData(status, thrusterr, "Thruster R");
+            PushDiagData(status, thrusterl, "Thruster L");
+
             rate.sleep();
         }
+        spinner.stop();
+    }
+
+    void PushDiagData(diagnostic_msgs::DiagnosticStatus & statusmsg, T200Thruster thruster, std::string thrusterName)
+    {
+        diagnostic_msgs::KeyValue thrusterValue;
+
+        thrusterValue.key = thrusterName + " Alive";
+        thrusterValue.value = BoolToString(thruster.isAlive());
+        statusmsg.values.push_back(thrusterValue);
+
+        thrusterValue.key = thrusterName + " Voltage";
+        thrusterValue.value = std::to_string(thruster.getVoltage());
+        statusmsg.values.push_back(thrusterValue);
+
+        thrusterValue.key = thrusterName + " Current";
+        thrusterValue.value = std::to_string(thruster.getCurrent());
+        statusmsg.values.push_back(thrusterValue);
+
+        thrusterValue.key = thrusterName + " Temperature";
+        thrusterValue.value = std::to_string(thruster.getTemperature());
+        statusmsg.values.push_back(thrusterValue);
     }
 
     void thrusterCb(const geometry_msgs::Twist &msg)
@@ -83,7 +141,7 @@ public:
         thrusterr.setVelocityRatio(fabs(tLeftForward), tLeftForward >0.0f ? T200ThrusterDirections::Forward : T200ThrusterDirections::Reverse);
         thrusterl.setVelocityRatio(fabs(tRightForward), tRightForward > 0.0f ? T200ThrusterDirections::Forward : T200ThrusterDirections::Reverse);
         
-        ROS_INFO("out: %f\n", tLeftForward);
+        //ROS_INFO("out: %f\n", tLeftForward);
     }
     float magnitude(float x, float y) //return the magnitude of a 2d vector
     {
@@ -98,4 +156,9 @@ int main(int argc, char** argv)
     tc.init();
 
     return 0;
+}
+
+inline const std::string BoolToString(const bool b)
+{
+  return b ? "true" : "false";
 }

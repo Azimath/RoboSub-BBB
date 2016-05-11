@@ -2,6 +2,11 @@
 #include <cmath>
 #include <cstdio>
 
+#define LINEARIZE_OUTPUT
+
+constexpr double T200Thruster::CURRENT_SCALE_FACTOR;
+constexpr double T200Thruster::VOLTAGE_SCALE_FACTOR;
+
 T200Thruster::T200Thruster(int bus_number, unsigned char address) :
     i2c_interface_(bus_number, address)
 {
@@ -32,10 +37,53 @@ void T200Thruster::setVelocityRatio(double velocity_ratio, T200ThrusterDirection
     if (direction == T200ThrusterDirections::Reverse)
         velocity_ratio *= -1.0;
 
+#ifdef LINEARIZE_OUTPUT
+    velocity_ratio = linearizeOutput(velocity_ratio);
+#endif
+
     // Compute true requested velocity value between -MAX_VELOCITY_VALUE and MAX_VELOCITY_VALUE
     short velocity_value = (short)(velocity_ratio * MAX_VELOCITY_VALUE);
     // Send command value to thruster
     setVelocity(velocity_value);
+}
+
+void T200Thruster::setVelocityRatio(double velocity_ratio)
+{
+    // Constrain the scale the user requests.
+    if (velocity_ratio < -1.0)
+        velocity_ratio = -1.0;
+    else if (velocity_ratio > 1.0)
+        velocity_ratio = 1.0;
+
+#ifdef LINEARIZE_OUTPUT
+    velocity_ratio = linearizeOutput(velocity_ratio);
+#endif
+
+    // Compute true requested velocity value between -MAX_VELOCITY_VALUE and MAX_VELOCITY_VALUE
+    short velocity_value = (short)(velocity_ratio * MAX_VELOCITY_VALUE);
+    // Send command value to thruster
+
+    setVelocity(velocity_value);
+}
+
+double T200Thruster::linearizeOutput(double velocity_desired)
+{
+    double thruster_setting = 0.0;
+
+    if(velocity_desired > 0.01)
+        thruster_setting = veloctiy_desired*0.788+0.101;
+    else if(velocity_desired < -0.01)
+        thruster_setting = velocity_desired*0.9-0.112;
+    else
+        thruster_setting = 0.0;
+
+    if(thruster_setting > 1.0)
+        thruster_setting = 1.0;
+    else if (thruster_setting < -1.0)
+        thruster_setting = -1.0;
+
+    return thruster_setting;
+
 }
 
 void T200Thruster::updateStatus()
