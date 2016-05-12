@@ -71,7 +71,7 @@ double T200Thruster::linearizeOutput(double velocity_desired)
     double thruster_setting = 0.0;
 
     if(velocity_desired > 0.01)
-        thruster_setting = veloctiy_desired*0.788+0.101;
+        thruster_setting = velocity_desired*0.788+0.101;
     else if(velocity_desired < -0.01)
         thruster_setting = velocity_desired*0.9-0.112;
     else

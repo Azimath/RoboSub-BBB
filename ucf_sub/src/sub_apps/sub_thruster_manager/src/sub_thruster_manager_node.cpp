@@ -1,3 +1,7 @@
+#if __cplusplus <= 199711L
+//  #error Needs C++11
+#endif
+
 #include "blue_robotics_t200/t200_thruster.h"
 
 #include <ros/ros.h>
@@ -17,13 +21,13 @@ class ThrusterManager {
     ros::Subscriber command_subscriber;
     ros::Publisher diagnostics_output;
 
-    ros::AsyncSpinner spinner;
+//    ros::AsyncSpinner spinner;
 
     T200Thruster thrusterr;
     T200Thruster thrusterl;
 
 public:
-    ThrusterManager() : thrusterl(2, 0x2D), thrusterr(2, 0x2E), spinner(1)
+    ThrusterManager() : thrusterl(2, 0x2D), thrusterr(2, 0x2E)//, spinner(1)
     {
         command_subscriber = nh_.subscribe("/thrustercommands", 1000, &ThrusterManager::thrusterCb, this);
 
@@ -32,12 +36,12 @@ public:
 
     void init()
     {
-        if(spinner.canStart())
+/*        if(spinner.canStart())
             spinner.start();
         else
             return;
-
-        ros::Rate rate(4);
+*/
+        ros::Rate rate(50);
         while(ros::ok()) {
             //Publish diagnostic data here
             diagnostic_msgs::DiagnosticStatus status;
@@ -58,16 +62,18 @@ public:
                 status.level = status.OK;
             else
                 status.level = status.ERROR;
-
             PushDiagData(status, thrusterr, "Thruster R");
             PushDiagData(status, thrusterl, "Thruster L");
-
+            
+            diagnostics_output.publish(status);
+            ROS_INFO("Count is %d\n", thrusterl.getRawVoltageMeasurement());
+            ros::spinOnce();
             rate.sleep();
         }
-        spinner.stop();
+        //spinner.stop();
     }
 
-    void PushDiagData(diagnostic_msgs::DiagnosticStatus & statusmsg, T200Thruster thruster, std::string thrusterName)
+    void PushDiagData(diagnostic_msgs::DiagnosticStatus & statusmsg, T200Thruster & thruster, std::string thrusterName)
     {
         diagnostic_msgs::KeyValue thrusterValue;
 

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(blue_robotics_t200)
 
+set(CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
+
 set(CMAKE_MODULE_PATH "${CMAKE_HOME_DIRECTORY}/../cmake_modules" {CMAKE_MODULE_PATH} )
 find_package(catkin REQUIRED)
 find_package(UCFUtilities)
