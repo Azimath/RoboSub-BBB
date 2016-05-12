@@ -125,7 +125,7 @@ double getCurrent();
 ////////////////////////////////////////////////////////////////////////////////
 bool isAlive();
 
-private:
+//private:
 
 static const int STATUS_DATA_BYTES = 9;
 static const int MAX_VELOCITY_VALUE = 32767;
